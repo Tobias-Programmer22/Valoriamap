@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      /* Eliminar margen y padding por defecto */
+      body, html {
+          margin: 0;
+          padding: 0;
+          overflow: hidden;
+      }
+
+      /* Contenedor principal del mapa */
+      .map-container {
+          width: 100vw;
+          height: 100vh;
+          overflow: hidden;
+          position: relative;
+          user-select: none;
+          background: black;
+      }
+
+      /* Imagen del mapa */
+      .map-image {
+          position: absolute;
+          cursor: grab;
+          transition: transform 0.2s ease, opacity 0.5s ease;
+          transform-origin: 0 0;
+          opacity: 1;
+      }
+
+      /* Imagen siguiente para transición */
+      .map-image.next {
+          opacity: 0;
+      }
+
+      /* Nodo de recurso: placeholder como esfera roja pequeña */
+      .resource-node {
+          position: absolute;
+          width: 12px;
+          height: 12px;
+          background-color: red;
+          border-radius: 50%;
+          pointer-events: auto;
+          z-index: 1001;
+          cursor: pointer;
+          transition: left 0.2s ease, top 0.2s ease;
+      }
+
+      /* Tooltip para mostrar información del nodo */
+      .tooltip {
+          position: absolute;
+          display: none;
+          background: rgba(0,0,0,0.7);
+          color: #fff;
+          padding: 5px;
+          border-radius: 3px;
+          pointer-events: none;
+          font-family: sans-serif;
+          font-size: 12px;
+          z-index: 1002;
+          white-space: pre-line;
+      }
+
+      /* Marca de agua */
+      .watermark {
+          position: absolute;
+          bottom: 10px;
+          right: 10px;
+          color: rgba(255, 255, 255, 0.5);
+          font-family: Arial, sans-serif;
+          font-size: 14px;
+          z-index: 1000;
+          pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Contenedor del mapa -->
+    <div class="map-container" id="mapContainer">
+      <img src="blank.png" class="map-image" id="mapImage" />
+      <div class="watermark">made by bunnysquared.</div>
+      <!-- Tooltip global para los nodos -->
+      <div id="tooltip" class="tooltip"></div>
+    </div>
+
+    <script>
+      // Variables de transformación
+      let scale = 1;
+      let isDragging = false;
+      let startX, startY, translateX = 0, translateY = 0;
+      let initialScale = 1;
+
+      const mapContainer = document.getElementById('mapContainer');
+      let mapImage = document.getElementById('mapImage');
+      const tooltip = document.getElementById('tooltip');
+
+      // Lista de mapas (solo 3, ya que no se usa el mapa de recursos)
+      const maps = [
+          "blank.png",
+          "country.png",
+          "religion.png"
+      ];
+      let currentMapIndex = 0;
+
+      // Datos de ejemplo para los nodos de recursos (coordenadas relativas a la imagen original)
+      const resourceNodesData = [
+          { x: 400, y: 600, type: 'Oil', country: 'Property of A', reserves: '500 million barrels' },
+          { x: 800, y: 300, type: 'Natural gas', country: 'Property of B', reserves: '300 millions of m³' },
+          { x: 1200, y: 900, type: 'Minerals', country: 'Property of C', reserves: '1.2 million tons' }
+      ];
+      // Array para almacenar los elementos creados
+      let resourceNodesElements = [];
+
+      // Calcula la escala inicial (para que la imagen quepa totalmente en el contenedor)
+      function calculateInitialScale() {
+          const containerWidth = mapContainer.clientWidth;
+          const containerHeight = mapContainer.clientHeight;
+          const imageWidth = mapImage.naturalWidth;
+          const imageHeight = mapImage.naturalHeight;
+          initialScale = Math.min(containerWidth / imageWidth, containerHeight / imageHeight);
+          return initialScale;
+      }
+
+      // Ajusta el zoom inicial y centra la imagen
+      function setInitialZoom() {
+          const containerWidth = mapContainer.clientWidth;
+          const containerHeight = mapContainer.clientHeight;
+          const imageWidth = mapImage.naturalWidth;
+          const imageHeight = mapImage.naturalHeight;
+          scale = calculateInitialScale();
+          translateX = (containerWidth - imageWidth * scale) / 2;
+          translateY = (containerHeight - imageHeight * scale) / 2;
+          updateMapTransform();
+      }
+
+      // Actualiza la transformación de la imagen y reposiciona los nodos (si están activos)
+      function updateMapTransform() {
+          mapImage.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+          if (resourceNodesElements.length > 0) {
+              updateResourceNodesPositions();
+          }
+      }
+
+      // Reposiciona cada nodo de recurso según el zoom y pan actual
+      function updateResourceNodesPositions() {
+          const nodeSize = 12;
+          resourceNodesElements.forEach(item => {
+              const { x, y } = item.data;
+              const left = x * scale + translateX - nodeSize / 2;
+              const top = y * scale + translateY - nodeSize / 2;
+              item.element.style.left = left + 'px';
+              item.element.style.top = top + 'px';
+          });
+      }
+
+      // Muestra los nodos de recurso sobre el mapa y añade eventos para el tooltip
+      function showResourceNodes() {
+          // Si ya están creados, no se vuelven a crear
+          if (resourceNodesElements.length > 0) return;
+          resourceNodesData.forEach(data => {
+              const node = document.createElement('div');
+              node.classList.add('resource-node');
+              node.addEventListener('mouseenter', () => {
+                  tooltip.innerText = `${data.type}\nCountry: ${data.country}\nReserves: ${data.reserves}`;
+                  tooltip.style.display = 'block';
+              });
+              node.addEventListener('mousemove', (e) => {
+                  tooltip.style.left = (e.clientX + 10) + 'px';
+                  tooltip.style.top = (e.clientY + 10) + 'px';
+              });
+              node.addEventListener('mouseleave', () => {
+                  tooltip.style.display = 'none';
+              });
+              mapContainer.appendChild(node);
+              resourceNodesElements.push({ element: node, data });
+          });
+          updateResourceNodesPositions();
+      }
+
+      // Elimina los nodos de recurso y oculta el tooltip
+      function hideResourceNodes() {
+          resourceNodesElements.forEach(item => {
+              if (item.element.parentNode) {
+                  item.element.parentNode.removeChild(item.element);
+              }
+          });
+          resourceNodesElements = [];
+          tooltip.style.display = 'none';
+      }
+
+      // Eventos para arrastrar (pan)
+      mapContainer.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          startDragging(e);
+      });
+      document.addEventListener('mousemove', (e) => drag(e));
+      document.addEventListener('mouseup', () => stopDragging());
+
+      // Evento de rueda para zoom
+      mapContainer.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          zoom(e);
+      });
+
+      // Cambiar de mapa con las teclas 1, 2 y 3
+      document.addEventListener('keydown', (e) => {
+          if (['1','2','3'].includes(e.key)) {
+              const newMapIndex = parseInt(e.key) - 1;
+              if (newMapIndex !== currentMapIndex) {
+                  changeMap(newMapIndex);
+              }
+          }
+      });
+
+      // Mostrar/ocultar nodos de recurso al presionar "R" (mayúscula o minúscula)
+      document.addEventListener('keydown', (e) => {
+          if (e.key.toLowerCase() === 'r') {
+              if (resourceNodesElements.length > 0) {
+                  hideResourceNodes();
+              } else {
+                  showResourceNodes();
+              }
+          }
+      });
+
+      function startDragging(e) {
+          isDragging = true;
+          startX = e.clientX - translateX;
+          startY = e.clientY - translateY;
+          mapImage.style.cursor = 'grabbing';
+      }
+
+      function drag(e) {
+          if (!isDragging) return;
+
+          const containerWidth = mapContainer.clientWidth;
+          const containerHeight = mapContainer.clientHeight;
+          const imageWidth = mapImage.naturalWidth * scale;
+          const imageHeight = mapImage.naturalHeight * scale;
+
+          const newTranslateX = e.clientX - startX;
+          const newTranslateY = e.clientY - startY;
+
+          if (imageWidth < containerWidth) {
+              translateX = (containerWidth - imageWidth) / 2;
+          } else {
+              translateX = Math.min(Math.max(newTranslateX, containerWidth - imageWidth), 0);
+          }
+
+          if (imageHeight < containerHeight) {
+              translateY = (containerHeight - imageHeight) / 2;
+          } else {
+              translateY = Math.min(Math.max(newTranslateY, containerHeight - imageHeight), 0);
+          }
+          updateMapTransform();
+      }
+
+      function stopDragging() {
+          isDragging = false;
+          mapImage.style.cursor = 'grab';
+      }
+
+      // Función de zoom centrada en el cursor, con límites y ajustes de pan
+      function zoom(e) {
+          const rect = mapContainer.getBoundingClientRect();
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+          const prevScale = scale;
+          const delta = e.deltaY > 0 ? 0.95 : 1.05;
+          scale *= delta;
+
+          const containerWidth = mapContainer.clientWidth;
+          const containerHeight = mapContainer.clientHeight;
+          const imageWidth = mapImage.naturalWidth * scale;
+          const imageHeight = mapImage.naturalHeight * scale;
+
+          if (scale < initialScale) {
+              scale = initialScale;
+              translateX = (containerWidth - mapImage.naturalWidth * scale) / 2;
+              translateY = (containerHeight - mapImage.naturalHeight * scale) / 2;
+          } else {
+              scale = Math.min(Math.max(scale, initialScale), 10);
+              translateX = mouseX - (mouseX - translateX) * (scale / prevScale);
+              translateY = mouseY - (mouseY - translateY) * (scale / prevScale);
+
+              if (imageWidth < containerWidth) {
+                  translateX = (containerWidth - imageWidth) / 2;
+              } else {
+                  translateX = Math.min(Math.max(translateX, containerWidth - imageWidth), 0);
+              }
+              if (imageHeight < containerHeight) {
+                  translateY = (containerHeight - imageHeight) / 2;
+              } else {
+                  translateY = Math.min(Math.max(translateY, containerHeight - imageHeight), 0);
+              }
+          }
+          updateMapTransform();
+      }
+
+      // Cambiar de mapa con transición; al cambiar se ocultan los nodos de recursos
+      function changeMap(newMapIndex) {
+          const oldMapImage = mapImage;
+          const newMapImage = new Image();
+          newMapImage.src = maps[newMapIndex];
+          newMapImage.className = 'map-image next';
+          mapContainer.appendChild(newMapImage);
+
+          oldMapImage.style.opacity = 0;
+
+          newMapImage.onload = () => {
+              const containerWidth = mapContainer.clientWidth;
+              const containerHeight = mapContainer.clientHeight;
+              scale = Math.min(containerWidth / newMapImage.naturalWidth, containerHeight / newMapImage.naturalHeight);
+              translateX = (containerWidth - newMapImage.naturalWidth * scale) / 2;
+              translateY = (containerHeight - newMapImage.naturalHeight * scale) / 2;
+              updateMapTransform();
+
+              newMapImage.style.opacity = 1;
+              setTimeout(() => {
+                  mapContainer.removeChild(oldMapImage);
+                  oldMapImage.remove();
+              }, 500);
+
+              mapImage = newMapImage;
+              currentMapIndex = newMapIndex;
+              setInitialZoom();
+
+              // Al cambiar de mapa se ocultan los nodos de recurso (si estuvieran visibles)
+              hideResourceNodes();
+          };
+      }
+
+      mapImage.onload = setInitialZoom;
+    </script>
+  </body>
+</html>
