@@ -16,7 +16,7 @@
 </head>
 <body>
   <div class="map-container" id="mapContainer">
-    <img src="blank.png" class="map-image" id="mapImage">
+    <img src="./map/blank.png" class="map-image" id="mapImage">
     <div class="watermark">made by bunnysquared.</div>
     <div id="tooltip" class="tooltip"></div>
     <div id="mobileToggleText" class="mobile-toggle-text">Tap here to toggle resources</div>
@@ -33,7 +33,7 @@
     let initialDistance = null;
     let initialScalePinch = 1;
     let initialTouchCenter = { x: 0, y: 0 };
-    const maps = ["blank.png", "country.png", "religion.png"];
+    const maps = ["./map/blank.png", "./map/country.png", "./map/religion.png"];
     let currentMapIndex = 0;
     const resourceNodesData = [
       { x: 400, y: 600, type: 'Oil', country: 'Property of A', reserves: '500 million barrels', texture: 'oil.png' },
